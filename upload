@@ -1,0 +1,898 @@
+#!/bin/bash
+
+##############################################################
+##                                                          ##
+##  ScarS' torrent upload script v0.9.7                     ##
+##                                                          ##
+##  created by: ScarS                                       ##
+##  edited by: BladE, TinTin                                ##
+##  created on: Sat Oct 31 2009                             ##
+##                                                          ##
+##  last modified by: TinTin                                ##
+##  last modified on: Sat Mar 30 2013                       ##
+##                                                          ##
+##                                                          ##
+##  script placement:                                       ##
+##  /usr/local/bin/ or ~/bin/                               ##
+##                                                          ##
+##  command:                                                ##
+##  upload [options] /path/to/dir/                          ##
+##                                                          ##
+##  options:                                                ##
+##  -c <category>  : category to upload in to               ##
+##  -d <path>      : path to downloads directory            ##
+##  -h             : show short information                 ##
+##  -i             : show extended information              ##
+##  -l             : list of categories                     ##
+##  -o <file>      : log output to file                     ##
+##  -p <password>  : password                               ##
+##  -r <file>      : load resource file                     ##
+##  -s <site>      : load .site.rc 							##
+##	-t <tags>      : tags to add must be in quotes          ##
+##  -u <username>  : username                               ##
+##  -w <path>      : path to torrentclient watch directory  ##
+##  -x <test>      : execute test [ cat, mkt, rfr ]         ##
+##  -y <number>    : piece size to use [ in 2^n bytes ]     ##
+##  -z <number>    : piece size NOT to use [ in kB ]        ##
+##                                                          ##
+##  requires:                                               ##
+##  - bash v3.2+                                            ##
+##  - curl                                                  ##
+##  - mktorrent v0.6+                                       ##
+##  - ~/upload/.upload.rc                                   ##
+##                                                          ##
+##  recommends:                                             ##
+##  - rtorrent                                              ##
+##  - rtorrent_fast_resume.pl                               ##
+##                                                          ##
+##############################################################
+
+# version number
+VERSION=0.9.7
+
+###############################
+##        SCRIPT START       ##
+###############################
+
+# create function to display dots
+progress() {
+    while [ 1 ]; do
+        echo -n " ."
+        sleep 1
+    done
+}
+
+# create function to delete the process directory
+cleanup_process() {
+    # if an error occured echo a stopped message to the log
+    if [ -n "$1" ]; then
+        echo "### auto upload stopped at: $(date)" >> "$LOGFILE"
+    fi
+
+    # append temporarily log to main log
+    cat "$LOGFILE" >> "$MAINLOG"
+
+    # if this is the only upload process delete the complete upload-processes dir
+    if [ $(ls -a "/tmp/upload-processes-$USER" | wc -l) -eq 3 ]; then
+        rm -rf "/tmp/upload-processes-$USER"
+    # if there are more upload processes only delete this process dir
+    else
+        rm -rf "/tmp/upload-processes-$USER/$$"
+    fi
+
+    # remove the .uploading dir
+    rm -rf "$FPATH/.uploading"
+
+    # if needed create an .uploaderror file
+    if [ -n "$1" ]; then
+        echo "$1" > "$FPATH/.uploaderror"
+    fi
+}
+
+# create function to handle CTRL-C and kill
+signal_trap() {
+    # check if dotting function is active and if so kill it
+    if [ -n "$PROCESS" ]; then
+        kill -9 $PROCESS
+    fi
+    echo -en "\b\b  \n\nTerminating . . . "
+
+    # echo script abortion to the log
+    echo "###-----------------------------------------------------" >> "$LOGFILE"
+    echo "### auto upload aborted at: $(date)" >> "$LOGFILE"
+
+    # delete the process directory
+    cleanup_process
+
+    # exit the script
+    echo -e "terminated"
+    exit 1
+}
+
+# echo start of script
+echo "torrent upload script v$VERSION by ScarS, modified by BladE and Tintin"
+
+# check if the bash version is 3.2+
+if [ ${BASH_VERSINFO[0]} -lt 3 ] || [ ${BASH_VERSINFO[0]} -eq 3 ] && [ ${BASH_VERSINFO[1]} -lt 2 ]; then
+    echo -e "\nerror: your bash version appears to be lower than 3.2, please update."
+    exit 1
+fi
+
+# enable case-insensitive matching
+shopt -s nocaseglob
+
+# set default resource file
+RESOURCE=".upload.rc"
+
+# check for resource file first because some settings are used to check options
+while getopts ":c:d:hilo:p:r:s:t:u:w:x:y:z:" opt; do
+    case "$opt" in
+    # option r: load resource file
+    r ) RESOURCE="$OPTARG";;
+    # option s: load .site.rc
+    s ) RESOURCE=".$OPTARG.rc";;
+    # skip all other options to be handled later
+    c | d | h | i | l | o | p | t | u | w | x | y | z ) continue;;
+    # option *: unknown option. return with an error
+    * )
+        echo -e "\nerror: -$OPTARG: this option was not recognised. run \`upload -h' for command explanation."
+        exit 1;;
+    esac
+done
+
+# if resource was not found in the current dir look in the uploader dir or home dir
+if [ ! -f "$RESOURCE" ]; then
+    if [ -f "$HOME/upload/$RESOURCE" ]; then
+        RESOURCE="$HOME/upload/$RESOURCE"
+    elif [ -f "$HOME/$RESOURCE" ]; then
+        RESOURCE="$HOME/$RESOURCE"
+    else
+        echo -e "\nerror: \`$RESOURCE' does not exist. make sure you have a resource file."
+        exit 1
+    fi
+fi
+
+# check if resource file is readable
+if [ ! -r "$RESOURCE" ]; then
+    echo -e "\nerror: \`$RESOURCE' is not readable. make sure your resource file is readable."
+    exit 1
+fi
+
+# include settings
+source "$RESOURCE"
+echo -e "\nloaded settings from \`$RESOURCE'"
+
+# reset options to walk them again
+OPTIND=1
+
+while getopts ":c:d:hilo:p:r:s:t:u:w:x:y:z:" opt; do
+    case "$opt" in
+    # option c: set a category
+    c )
+        # get the entered category
+        CAT="$OPTARG"
+        CMATCH=0
+
+        # walk array of categories and search for a match
+        for (( i = 0; i < ${#ALLCATS[@]}; i++ )); do
+            # if a matching category was found set the category and path and stop looping
+            if [[ $CAT =~ ${ALLCATS[i]} ]]; then
+                if [ $KEYVAL -eq 1 ]; then
+                    CAT=${ALLCATS[i+1]}
+                else
+                    CAT=${ALLCATS[i]}
+                fi
+                CMATCH=1
+                break
+            fi
+        done
+
+        # if no matching category was found return an error
+        if [ $CMATCH -eq 0 ]; then
+            echo -e "\nerror: entered category after option -c was not found in list of categories. run \`upload -l' for a list of categories."
+            exit 1
+        fi;;
+    # option d: set path to download dir
+    d )
+        # check if input is a directory
+        if [ ! -d "$OPTARG" ]; then
+            echo -e "\nerror: entered path after option -d is not a directory. make sure the entered path points to a directory."
+            exit 1
+        elif [ ! -r "$OPTARG" ]; then
+            echo -e "\nerror: directory at entered path after option -d is not readable. make sure the entered path points to a readable directory.";
+            exit 1
+        else
+            DOWNLOADS="$OPTARG"
+        fi;;
+    # option h: show command information
+    h )
+        cat <<EOF
+
+command:
+upload [options] /path/to/dir/
+
+options:
+-c <category>  : category to upload in to
+-d <path>      : path to downloads directory
+-h             : show short information
+-i             : show extended information
+-l             : list of categories
+-o <file>      : log output to file
+-p <password>  : password
+-r <file>      : load resource file
+-s <site>      : load .site.rc
+-t <tags>      : tags to add must be in quotes
+-u <username>  : username
+-w <path>      : path to torrentclient watch directory
+-x <test>      : execute test [ cat, mkt, rfr ]
+-y <number>    : piece size to use [ in 2^n bytes ]
+-z <number>    : piece size NOT to use [ in kB ]
+EOF
+        exit 0;;
+    # option i: show extended information
+    i )
+        cat <<EOF
+
+command:
+upload [options] /path/to/dir/
+
+options:
+-c <category>  : category to upload in to
+-d <path>      : path to downloads directory
+-h             : show short information
+-i             : show extended information
+-l             : list of categories
+-o <file>      : log output to file
+-p <password>  : password
+-r <file>      : load resource file
+-s <site>      : load .site.rc
+-t <tags>      : tags to add must be in quotes
+-u <username>  : username
+-w <path>      : path to torrentclient watch directory
+-x <test>      : execute test [ cat, mkt, rfr ]
+-y <number>    : piece size to use [ in 2^n bytes ]
+-z <number>    : piece size NOT to use [ in kB ]
+
+requires:
+- bash v3.2+
+- curl
+- mktorrent v0.6+
+- ~/upload/.upload.rc
+
+recommends:
+- rtorrent
+- rtorrent_fast_resume.pl
+EOF
+        exit 0;;
+
+    # option l: show list of possible categories
+    l )
+        # create string of categories array
+        for (( i = 0; i < ${#ALLCATS[@]}; i++ )); do
+            if [[ ${ALLCATS[$i]} =~ ^[0-9]*$ ]]; then
+                continue
+            elif [ $i -eq 0 ]; then
+                RET="'${ALLCATS[$i]}'"
+            else
+                RET="$RET, '${ALLCATS[$i]}'"
+            fi
+        done
+
+        echo -e "\nlist of categories:\n$RET"
+        exit 0;;
+    # option o: set output to entered file
+    o )
+        # check if input is a directory
+        if [ -d "$OPTARG" ]; then
+            echo -e "\nerror: entered path after option -o is a directory. makse sure the entered path points to a file.";
+            exit 1
+        # if entered path does not contain a / prepend the current dir
+        elif [[ ! "$OPTARG" =~ \/ ]]; then
+            LOGFILE="$PWD/$OPTARG"
+        else
+            LOGFILE="$OPTARG"
+        fi;;
+    # option p: set password
+    p ) PASSWORD="$OPTARG";;
+    # option r: previously handled, do nothing
+    r ) continue;;
+    # option s: previously handled, do nothing
+    s ) continue;;
+    # option t: set tags to be used
+    t ) TAG="$OPTARG"	;;
+    # option u: set username
+    u ) USERNAME="$OPTARG";;
+    # option w: set path to torrent client watch dir
+    w )
+        # check if input is a directory
+        if [ ! -d "$OPTARG" ]; then
+            echo -e "\nerror: entered path after option -w is not a directory. make sure the entered path points to a directory."
+            exit 1
+        elif [ ! -w "$OPTARG" ]; then
+            echo -e "\nerror: directory at entered path after option -w is not writable. make sure the entered path points to a writable directory.";
+            exit 1
+        else
+            TORRENTS="$OPTARG"
+        fi;;
+    # option x: set test string
+    x ) TEST=$OPTARG;;
+    # option y: use this piece size
+    y )
+        if [[ $OPTARG =~ ^[0-9]*$ ]] && [ $OPTARG -ge 15 ] && [ $OPTARG -le 28 ]; then
+            PIECE_SIZE=$OPTARG
+        else
+            echo -e "\nerror: entered value after option -y was not a valid piece size value. run \`upload -h' for command explanation."
+            exit 1
+        fi;;
+    # option z: set what piece size NOT to use
+    z )
+        # min piece size: 2^15
+        MIN=32768
+        # max piece size: 2^28
+        MAX=268435456
+
+        # check if input is a number
+        if [[ $OPTARG =~ ^[0-9]*$ ]] && [ $OPTARG -ge $MIN ] && [ $OPTARG -le $MAX ]; then
+            # start at min piece size
+            NUM=15
+
+            # check all piece sizes
+            while [ $MAX -ge $MIN ]; do
+                # if input is larger than piece size increase by 1
+                if [ $OPTARG -gt $MAX ]; then
+                    let NUM+=1
+                fi
+                # divide by 2 to get previous 2^x value
+                let MAX/=2
+            done
+
+            NOTPIECES=$NUM
+        else
+            echo -e "\nerror: entered value after option -z was not a valid piece size value. run \`upload -h' for command explanation."
+            exit 1
+        fi;;
+    # option *: unknown option. return with an error
+    * )
+        echo -e "\nerror: -$OPTARG: this option was not recognised. run \`upload -h' for command explanation."
+        exit 1;;
+    esac
+done
+
+# check if the command mktorrent was found
+if ( ! which "$MKT" &>/dev/null ); then
+    echo -e "\nerror: \`$MKT' is not a command. make sure the path of MKTORRENT is right."
+    exit 1
+# check if the command curl was found
+elif ( ! which "$CURL" &>/dev/null ); then
+    echo -e "\nerror: \`curl' is not a command. make sure the path of CURL is right. if not installed: run as root [or sudo] \`apt-get install curl' and try again."
+    exit 1
+# check if the command rtorrent_fast_resume was found
+elif [ -n "$RFR" ] && ( ! which "$RFR" &>/dev/null ); then
+    echo -e "\nerror: \`$RFR' is not a command. make sure the path of RFR [ rtorrent_fast_resume.pl ] is right."
+    exit 1
+fi
+
+# check if downloads dir is a dir
+if [ ! -d "$DOWNLOADS" ]; then
+    echo -e "\nerror: \`$DOWNLOADS' is not a directory. make sure the path of DOWNLOADS is right."
+    exit 1
+# check if downloads dir is readable
+elif [ ! -r "$DOWNLOADS" ]; then
+    echo -e "\nerror: \`$DOWNLOADS' is not readable. make sure the path of DOWNLOADS points to a readable directory."
+    exit 1
+# check if torrents dir is a dir
+elif [ ! -d "$TORRENTS" ]; then
+    echo -e "\nerror: \`$TORRENTS' is not a directory. make sure the path of TORRENTS is right."
+    exit 1
+# check if torrents dir is writable
+elif [ ! -w "$TORRENTS" ]; then
+    echo -e "\nerror: \`$TORRENTS' is not writable. make sure the path of TORRENTS points to a writable directory."
+    exit 1
+# check if logfile is a dir
+elif [ -d "$LOGFILE" ] || [[ "$LOGFILE" = */ ]]; then
+    echo -e "\nerror: \`$LOGFILE' is a directory. make sure the path of LOGFILE points to a file."
+    exit 1
+# check if logfile dir exists
+elif [ ! -d $(dirname "$LOGFILE") ]; then
+    echo -e "\nerror: \`$LOGFILE' has a path to a directory that does not exist."
+    exit 1
+fi
+
+# check for ending slash in torrents dir and if not exist append it
+if [[ "$DOWNLOADS" != */ ]]; then
+    DOWNLOADS="$DOWNLOADS/"
+fi
+
+# check for ending slash in torrents dir and if not exists append it
+if [[ "$TORRENTS" != */ ]]; then
+    TORRENTS="$TORRENTS/"
+fi
+
+# switch to entered variables after options
+shift $((OPTIND-1))
+
+# if no variables were passed to the script show an error
+if [ ! -n "$1" ]; then
+    echo -e "\nerror: you did not enter a path. run \`upload -h' for command explanation."
+    exit 1
+# if a third variable was passed to the script show an error
+elif [ -n "$2" ]; then
+    echo -e "\nerror: you entered too many variables. run \`upload -h' for command explanation."
+    exit 1
+fi
+
+# set the entered path
+RLSPATH="$1"
+
+# if entered path does not contain a / prepend the download dir
+if [[ ! "$RLSPATH" =~ \/ ]]; then
+    RLSPATH="$DOWNLOADS$RLSPATH"
+fi
+
+# check if entered path is a directory
+if [ ! -d "$RLSPATH" ]; then
+    echo -e "\nerror: \`$RLSPATH' is not a directory."
+    exit 1
+fi
+
+# move to the entered path
+cd "$RLSPATH"
+
+# get the full path
+FPATH="$PWD"
+
+# get the dir name from the path by removing the download dir prefix
+NAME=${FPATH/$DOWNLOADS/}
+
+# replace & with its hex value for searching
+SEARCHNAME=${NAME//&/%26/}
+
+# if the name is the same as the path it's not in the downloads dir so return an error
+if [ "$NAME" = "$FPATH" ]; then
+    echo -e "\nerror: \`$FPATH' is not in \`$DOWNLOADS'."
+    exit 1
+fi
+
+# check filters
+if [ ! -n "$CAT" ]; then
+    FMATCH=0
+    # walk array of filters and search for a match
+    for (( i = 0; i < ${#FILTERS[@]}; i++ )); do
+        # if a match was found set the min, max and category and stop looping
+        if [[ "$RLSPATH" =~ ${FILTERS[$i]} ]] && [[ ! -n ${EXCEPTS[i]} || ! "$RLSPATH" =~ ${EXCEPTS[i]} ]]; then
+            MINSIZE=${MINS[i]}
+            MAXSIZE=${MAXS[i]}
+            CAT=${CATS[i]}
+			TAG=${TAGS[i]}
+            FMATCH=1
+            break
+        fi
+    done
+
+    # if no match found return an error
+    if [ $FMATCH -eq 0 ]; then
+        echo -e "\nerror: no match was found with your filters."
+        exit 1
+    fi
+fi
+
+# check p2p flag
+if [ ! -n "$P2P" ]; then
+    P2PMATCH=0
+    # walk array of p2p groups and search for a match
+    if [[ "$RLSPATH" =~ $P2PCATS ]] && [[ ! -n $P2PEXCEPTS || ! "$RLSPATH" =~ $P2PEXCEPTS ]]; then
+	P2PMATCH=1
+    fi
+fi
+
+# check if filters need to be tested
+if [[ $TEST =~ cat ]]; then
+    echo -e "\nfilter test complete\ncategory found: $CAT"
+    exit 1
+fi
+
+# check if p2p need to be tested
+if [[ $TEST =~ p2p ]]; then
+    echo -e "\np2p test complete\nIs match found: $P2PMATCH"
+    exit 1
+fi
+
+# get the dir size
+SIZE=$(du -s "$FPATH" | cut -f 1)
+
+# get the dir size in MB
+MBs=$((SIZE/1024))
+
+# look for match with size filter and if found return an error
+if [ -n "$FMATCH" ] && [[ $MBs -lt $MINSIZE || $MBs -gt $MAXSIZE ]]; then
+    echo -e "\nerror: $MBs MB is lower than $MINSIZE MB or greater than $MAXSIZE MB."
+    exit 1
+fi
+
+# if release is already being uploaded return an error, else create uploading directory
+if [ $UPCHECK -eq 1 ] && [ -d "$FPATH" ] && [ -d "$FPATH/.uploading" ]; then
+    echo -e "\nerror: torrent is already being uploaded (.uploading directory found in release directory).";
+    exit 1
+elif [ -d "$FPATH" ] && [ ! -d "$FPATH/.uploading" ]; then
+    mkdir "$FPATH/.uploading"
+fi
+
+# create and move to process dir
+mkdir -p "/tmp/upload-processes-$USER/$$"
+cd "/tmp/upload-processes-$USER/$$"
+
+# set main log
+MAINLOG="$LOGFILE"
+
+# set temp log
+LOGFILE="log.tmp"
+
+# log start script and info
+echo >> "$LOGFILE"
+echo "########################################################" >> "$LOGFILE"
+echo "### auto upload started at: $(date)" >> "$LOGFILE"
+echo "### name: $NAME" >> "$LOGFILE"
+echo "### path: $FPATH" >> "$LOGFILE"
+echo "### size: $MBs MB" >> "$LOGFILE"
+echo "### cat: $CAT" >> "$LOGFILE"
+echo "### tags: $TAG" >> "$LOGFILE"
+
+# enable CTRL+C and kill trap
+trap signal_trap SIGINT SIGTERM
+
+# check if uploading needs to be done so we need to log in and look for a dupe
+if [[ ! $TEST =~ mkt ]] && [[ ! $TEST =~ rfr ]]; then
+    echo -en "\nlogging in . . ."
+
+    # start dot function
+    progress &
+
+    # get process pid
+    PROCESS=$!
+
+    # disown process to supress output
+    disown %%
+
+    # log in to the site
+    wget -U "$USERAGENT" -q --no-check-certificate -O login.tmp --save-cookies cookies.tmp --keep-session-cookies --post-data "$LOGINUSR=$USERNAME&$LOGINPWD=$PASSWORD" "$LOGINURL"
+
+    # when done kill dot function
+    kill -9 $PROCESS
+    unset PROCESS
+
+    # check if you are logged in
+    LOGINCHECK=$(grep "$LOGINTXT" login.tmp)
+
+    # if you are not logged in stop the auto upload
+    if [ ! -n "$LOGINCHECK" ]; then
+        echo -e "\b failed\n\nerror: it appears you could not be logged in. check login settings."
+        echo "### error: it appears you could not be logged in" >> "$LOGFILE"
+        cleanup_process "login"
+        exit 1
+    fi
+
+    echo -en " logged in\n\nchecking for dupe . . ."
+
+    # start dot function
+    progress &
+
+    # get process pid
+    PROCESS=$!
+
+    # disown process to supress output
+    disown %%
+
+    # search the site for the torrent
+    wget -U "$USERAGENT" -q --no-check-certificate -O dupecheck.tmp --load-cookies cookies.tmp "$SEARCHURL$SEARCHNAME"
+
+    # when done kill the dot function
+    kill -9 $PROCESS
+    unset PROCESS
+
+    # check if a result was found
+    DUPECHECK=$(grep "$SEARCHTXT" dupecheck.tmp)
+
+    # if a result was found stop the auto upload
+    if [ ! -n "$DUPECHECK" ]; then
+        echo -e "\bdupe found\n\nerror: torrent has already been uploaded."
+        echo "### error: torrent has already been uploaded" >> "$LOGFILE"
+
+        # check if the duped release needs to be downloaded
+        if [ $DUPEDL -eq 1 ]; then
+            # grab download link
+            DLPAGE=$(grep "$DUPETXT" dupecheck.tmp | $DUPECMD)
+            DLPAGE=${DLPAGE//&amp;/&}
+
+            # download torrent
+            echo -e "\ndownloading: $DUPEURL$DLPAGE"
+            wget -U "$USERAGENT" -q --no-check-certificate -O "$NAME.torrent" --load-cookies cookies.tmp "$DUPEURL$DLPAGE"
+            echo "### downloaded: $DUPEURL$DLPAGE" >> "$LOGFILE"
+
+            # check if rtorrent_fast_resume.pl needs to be done
+            if [ -n "$RFR" ]; then
+                "$RFR" "$DOWNLOADS" < "$NAME.torrent" > "$TORRENTS$PREPEND$NAME.torrent"
+            else
+                mv "$NAME.torrent" "$TORRENTS$PREPEND$NAME.torrent"
+            fi
+        fi
+
+        cleanup_process "dupe"
+        exit 1
+    fi
+
+    echo -e "\bno dupe found\n"
+fi
+
+# calculate piece size depending on dir size
+
+# > 473 GB -> 32 MB piece size (15.136+ pieces)
+if [ $MBs -gt 484352 ]; then
+    PIECES=24
+# 190 - 473 GB -> 16 MB piece size (12160 - 30272 pieces)
+elif [ $MBs -gt 194560 ]; then
+    PIECES=24
+# 72 - 190 GB -> 8 MB piece size (9216 - 24320 pieces)
+elif [ $MBs -gt 73728 ]; then
+    PIECES=23
+# 16 - 72 GB -> 4 MB piece size (4096 - 18432 pieces)
+elif [ $MBs -gt 16384 ]; then
+    PIECES=22
+# 8 - 16 GB -> 2 MB piece size (4096 - 8192 pieces)
+elif [ $MBs -gt 8192 ]; then
+    PIECES=21
+# 4 - 8 GB -> 1 MB piece size (4096 - 8192 pieces)
+elif [ $MBs -gt 4096 ]; then
+    PIECES=20
+# 2 - 4 GB -> 512 KB piece size (4096 - 8192 pieces)
+elif [ $MBs -gt 2048 ]; then
+    PIECES=19
+# 1 - 2 GB -> 256 KB piece size (4096 - 8192 pieces)
+elif [ $MBs -gt 1024 ]; then
+    PIECES=18
+# 512 MB - 1 GB -> 128 KB piece size (4096 - 8192 pieces)
+elif [ $MBs -gt 512 ]; then
+    PIECES=17
+# 256 MB - 512 MB -> 64 KB piece size (4096 - 8192 pieces)
+elif [ $MBs -gt 256 ]; then
+    PIECES=16
+# < 256 MB -> 32 KB piece size (1 - 8192 pieces)
+else
+    PIECES=15
+fi
+
+# set specified piece size
+if [ -n "$PIECE_SIZE" ]; then
+    PIECES=$PIECE_SIZE
+fi
+
+# if piece size matched entered piece size not to chose size and is highest possible piece size decrement by 1
+if [[ $NOTPIECES -eq $PIECES ]] && [ $PIECES -eq 23 ]; then
+    let PIECES-=1
+    echo "### original piece size: $NOTPIECES ("$((2**NOTPIECES))" bytes)" >> "$LOGFILE"
+    echo "### piece size: $PIECES ("$((2**PIECES))" bytes)" >> "$LOGFILE"
+# if piece size matched entered piece size not to chose increment by 1
+elif [[ $NOTPIECES -eq $PIECES ]]; then
+    let PIECES+=1
+    echo "### original piece size: $NOTPIECES ("$((2**NOTPIECES))" bytes)" >> "$LOGFILE"
+    echo "### piece size: $PIECES ("$((2**PIECES))" bytes)" >> "$LOGFILE"
+# log piece size
+else
+    echo "### piece size: $PIECES ("$((2**PIECES))" bytes)" >> "$LOGFILE"
+fi
+
+# log start mktorrent
+echo "### mktorrent started: $(date)" >> "$LOGFILE"
+
+# create the torrent
+"$MKT" -l $PIECES -c "TD Home away from home" -o "$NAME.torrent" -pa "$ANNOUNCEURL" "$FPATH"
+
+# log complete mktorrent
+echo "### mktorrent completed: $(date)" >> "$LOGFILE"
+
+# check if uploading needs to be done
+if [[ ! $TEST =~ mkt ]] && [[ ! $TEST =~ rfr ]]; then
+    echo -en "\nchecking for dupe . . ."
+
+    # start dot function
+    progress &
+
+    # get process pid
+    PROCESS=$!
+
+    # disown process to supress output
+    disown %%
+
+    # search the site for the torrent
+    wget -U "$USERAGENT" -q --no-check-certificate -O dupecheck.tmp --load-cookies cookies.tmp "$SEARCHURL$SEARCHNAME"
+
+    # when done kill the dot function
+    kill -9 $PROCESS
+    unset PROCESS
+
+    # check if you are logged in
+    LOGINCHECK=$(grep "$LOGINTXT" dupecheck.tmp)
+
+    # if you are not logged in try to log in again
+    if [ ! -n "$LOGINCHECK" ]; then
+        echo -en " failed to log in\n\nlogging in . . ."
+
+        # start dot function
+        progress &
+
+        # get process pid
+        PROCESS=$!
+
+        # disown process to supress output
+        disown %%
+
+        # log in again
+        wget -U "$USERAGENT" -q --no-check-certificate -O login.tmp --save-cookies cookies.tmp --keep-session-cookies --post-data "$LOGINUSR=$USERNAME&$LOGINPWD=$PASSWORD" "$LOGINURL"
+
+        # when done kill the function
+        kill -9 $PROCESS
+        unset PROCESS
+
+        # check if you are logged in
+        LOGINCHECK=$(grep "$LOGINTXT" login.tmp)
+
+        # if you are not logged in stop the auto upload
+        if [ ! -n "$LOGINCHECK" ]; then
+            mv "$NAME.torrent" "/tmp/upload-processes-$USER/$PREPEND$NAME.torrent"
+            echo -e "\bfailed\n\nerror: it appears you could not be logged in - torrent saved: \`/tmp/upload-processes-$USER/$PREPEND$NAME.torrent'."
+            echo "### error: it appears you could not be logged in - torrent saved: /tmp/upload-processes-$USER/$PREPEND$NAME.torrent" >> "$LOGFILE"
+            cleanup_process "login"
+            exit 1
+        fi
+        echo -en " logged in\n\nchecking for dupe . . ."
+
+        # start dot function
+        progress &
+
+        # get process pid
+        PROCESS=$!
+
+        # disown process to supress output
+        disown %%
+
+        # search the site for the torrent
+        wget -U "$USERAGENT" -q --no-check-certificate -O dupecheck.tmp --load-cookies cookies.tmp "$SEARCHURL$SEARCHNAME"
+
+        # when done kill the dot function
+        kill -9 $PROCESS
+        unset PROCESS
+    fi
+
+    # check if a result was found
+    DUPECHECK=$(grep "$SEARCHTXT" dupecheck.tmp)
+
+    # if a result was found stop the auto upload
+    if [ ! -n "$DUPECHECK" ]; then
+        rm -f "$NAME.torrent"
+        echo -e "\bdupe found\n\nerror: torrent has already been uploaded - torrent removed."
+        echo "### error: torrent has already been uploaded - torrent removed" >> "$LOGFILE"
+
+        # check if the duped release needs to be downloaded
+        if [ $DUPEDL -eq 1 ]; then
+            # grab download link
+            DLPAGE=$(grep "$DUPETXT" dupecheck.tmp | $DUPECMD)
+            DLPAGE=${DLPAGE//&amp;/&}
+
+            # download torrent
+            echo -e "\ndownloading: $DUPEURL$DLPAGE"
+            wget -U "$USERAGENT" -q --no-check-certificate -O "$NAME.torrent" --load-cookies cookies.tmp "$DUPEURL$DLPAGE"
+            echo "### downloaded: $DUPEURL$DLPAGE" >> "$LOGFILE"
+
+            # check if rtorrent_fast_resume.pl needs to be done
+            if [ -n "$RFR" ]; then
+                "$RFR" "$DOWNLOADS" < "$NAME.torrent" > "$TORRENTS$PREPEND$NAME.torrent"
+            # check if the mktorrent created torrent needs to be moved
+            else
+                mv "$NAME.torrent" "$TORRENTS$PREPEND$NAME.torrent"
+            fi
+        fi
+
+        cleanup_process "dupe"
+        exit 1
+    fi
+
+    echo -e "\bno dupe found"
+
+    # look for an NFO in the top dir
+    NFO=$(find "$FPATH" -maxdepth 1 -iname *.nfo -print -quit)
+
+    # if no NFO has been found look for an NFO in subdirs
+    if [ ! -n "$NFO" ]; then
+        NFO=$(find "$FPATH" -iname *.nfo -print -quit)
+    fi
+
+    # if no NFO has been found create one to enter description
+    if [ ! -n "$NFO" ]; then
+        echo "### nfo: not found, creating custom description" >> "$LOGFILE"
+        echo "name: $NAME" > "nfo.tmp"
+        echo "category: $CAT" >> "nfo.tmp"
+        echo "size: $MBs MB ($SIZE kB)" >> "nfo.tmp"
+        echo "No NFO was supplied for this release" >> "nfo.tmp"
+        NFO="nfo.tmp"
+    else
+        echo "### nfo: $NFO" >> "$LOGFILE"
+    fi
+
+    echo -en "\nuploading torrent . . ."
+
+    # start dot function
+    progress &
+
+    # get process pid
+    PROCESS=$!
+
+    # disown process to supress output
+    disown %%
+
+ #   if [ $P2PMATCH -eq 1 ]; then
+#	P2PXTRA = "-F 'p2p=on'"
+  #  else
+	#P2PXTRA = "=F 'p2p=off'"
+  #  fi
+  
+#Strip the NFO
+    strings $NFO > strnfo.tmp
+	grep -v '^ *$' strnfo.tmp > newnfo.tmp
+	STRNFO="newnfo.tmp"
+
+#grap the auth key from the upload page 
+	wget -U "$USERAGENT" -q --no-check-certificate -O getauth.tmp --load-cookies cookies.tmp "$UPLOADURL"
+	AUTHTAG="auth"
+	AUTH=$(sed -n 's/.*name="auth"\s\+value="\([^"]\+\).*/\1/p' getauth.tmp)
+
+    # prepare the upload command
+    eval "UPLOADXTRA=\"$UPLOADXTRA\""
+    UPLOADCMD="'$CURL' -s -k -o upload.tmp -b cookies.tmp -A '$USERAGENT' -H 'Expect:' -F '$UPLOADCAT=$CAT' -F '$UPLOADTAG=$TAG' -F '$UPLOADTITLE=$NAME' -F '$UPLOADTOR=@$NAME.torrent' -F '$AUTHTAG=$AUTH' $UPLOADXTRA '$UPLOADURL'"
+	# $P2PXTRA 
+    # execute the upload command (need to use eval for $UPLOADXTRA)
+	
+    eval $UPLOADCMD
+
+    # when done kill the dot function
+    kill -9 $PROCESS
+    unset PROCESS
+
+    echo -e "\bupload complete"
+
+    if [ -e upload.tmp ] && [ $(cat upload.tmp | wc -c) -ne 1 ]; then
+        mv "upload.tmp" "/tmp/upload-processes-$USER/upload$$.tmp"
+        echo -e "NOTE: the site returned something. make sure the upload is working properly. you might need to re-download the torrent.\ncheck the content of \`/tmp/upload-processes-$USER/upload$$.tmp' for the exact output.\n"
+    fi
+fi
+
+# check if rtorrent_fast_resume.pl needs to be done
+if [ -n "$RFR" ] && [[ ! $TEST =~ mkt ]]; then
+    "$RFR" "$DOWNLOADS" < "$NAME.torrent" > "$TORRENTS$PREPEND$NAME.torrent"
+# check if the mktorrent created torrent needs to be moved
+elif [[ ! $TEST =~ mkt ]]; then
+    mv "$NAME.torrent" "$TORRENTS$PREPEND$NAME.torrent"
+fi
+
+if [[ $TEST =~ mkt ]]; then
+    mv "$NAME.torrent" "/tmp/upload-processes-$USER/$PREPEND$NAME.torrent"
+    echo -e "\nmktorrent test completed\ntorrent saved: /tmp/upload-processes-$USER/$PREPEND$NAME.torrent"
+    echo "### mktorrent test completed - torrent saved: /tmp/upload-processes-$USER/$PREPEND$NAME.torrent" >> "$LOGFILE"
+    echo "### auto upload completed at: $(date)" >> "$LOGFILE"
+    cleanup_process
+    exit 1
+fi
+
+# echo script completion
+echo -e "\ntorrent moved to torrent client watch dir."
+echo "### auto upload completed at: $(date)" >> "$LOGFILE"
+
+# delete the process directory
+cleanup_process
+
+# check if uploaded dir exists and if not create it
+if [[ ! $TEST =~ rfr ]] && [ ! -d "$FPATH/.uploaded" ]; then
+    mkdir "$FPATH/.uploaded"
+fi
+
+###############################
+##        SCRIPT END         ##
+###############################

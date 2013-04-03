@@ -1,0 +1,385 @@
+#!/bin/bash
+####################################
+##    example resource file for   ##
+##      torrent upload script     ##
+##                                ##
+##      save in ~/.upload.rc      ##
+##  chmod 700 to restrict access  ##
+####################################
+##         LOGIN SETTINGS         ##
+####################################
+
+# your website username
+USERNAME=""
+
+# your website password
+PASSWORD=""
+
+# website login URL
+LOGINURL="http://www.torrent-damage.net/login.php"
+
+# logged in text: something _unique_ to check if you are logged in
+# possibly your username if it's unique and on the page you get directed to after logging in
+LOGINTXT="user"
+
+# login form username: look for input NAME="username"
+LOGINUSR="username"
+
+# login form password: look for input NAME="password"
+LOGINPWD="password"
+
+
+####################################
+##         SEARCH SETTINGS        ##
+####################################
+
+# website search URL
+SEARCHURL="http://www.torrent-damage.net/torrents.php?action=search&searchstr="
+
+# search no result text: something _unique_ to check if no results are found
+SEARCHTXT="Your search did not match anything."
+
+# download dupe: 1 = yes, 0 = no
+# note: only possible if download link is on the torrents page
+DUPEDL=0
+
+# URL that needs to be prepended to the download URL
+DUPEURL=""
+
+# search download link text:  something _unique_ to find the exact line
+DUPETXT="action=download"
+
+# command to extract the download link from the complete line
+# note: test for the best way to get it outside the script first
+DUPECMD="cut -d \" -f 2"
+
+####################################
+##         UPLOAD SETTINGS        ##
+####################################
+
+# website upload URL
+UPLOADURL="http://www.torrent-damage.net/upload.php"
+
+# your personal announce URL
+ANNOUNCEURL="http://tracker.torrent-damage.net//announce"
+
+# upload form torrent: look for input NAME="torrent"
+UPLOADTOR="file_input"
+
+# upload form category: look for select NAME="category"
+UPLOADCAT="type"
+
+# upload title form input
+UPLOADTITLE="title"
+
+# upload tags
+UPLOADTAG="tags"
+
+# upload form extras: look for other inputs with NAME and VALUE
+# and add to the list with: -F 'name=value'
+UPLOADXTRA=" -F 'submit=true' -F 'desc=<\$STRNFO' -F 'Anonymous=on'"
+# The auth field is no longer needed, upload script now auto adds it since version 0.9.7
+# -F 'auth='
+
+####################################
+##          PATH SETTINGS         ##
+####################################
+
+# path to your downloads directory
+DOWNLOADS="/home/user/downloads"
+
+# path to your torrent client watch directory
+TORRENTS="/home/user/rtorrent/watch"
+
+# path to your log file: set to /dev/null to disable logging
+LOGFILE="/home/user/upload/upload.log"
+
+# path to curl: if in $PATH just enter curl
+CURL="curl"
+
+# path to mktorrent: if in $PATH just enter mktorrent
+MKT="mktorrent"
+
+# path to rtorrent_fast_resume.pl: leave empty if you dont want to use this
+RFR=""
+
+
+####################################
+##       ADVANCED SETTINGS        ##
+####################################
+
+# string used to identify as a specific user-agent
+USERAGENT="TD/3.0"
+
+# text to prepend on the torrent file before moving it to your torrents dir
+PREPEND="td."
+
+# check for already uploading: use with UPCHECK - 1 = yes, 0 = no
+# you only need to disable this if you expect to upload the same torrent multiple times at the same time
+UPCHECK=1
+
+# list of categories able to be uploaded into: look for options after select NAME=category
+# if the option value is a number add it _after_ the category name
+ALLCATS=(
+	"Music" 0 "Movies" 1 "TV" 2  
+	"Apps" 3 "Games" 4 "Porn" 5 "Other" 6
+)
+
+# list of groups that should be flagged as p2p. Format: "(-GrpName1|-Grpname2)", dont forget the seperator :)
+P2PCATS="(-NYDIC|-26K|-CM8|-THETA|-3DM|-NFT|-LAZi|-FUSiON|-P2P|-XWT|-LTW|-FLAWL3SS|-IMAGiNE|-SIC|-ViSiON|-Rx|-FreaK|-CaLLiOPEd|-P2PROCKS|-J4F|-aXXo|-CtrlHD|-DEViSE|-DON|-D-ZON3|-ESiR|-EuReKA|-FOM|-GRiM|-iAPULA|-iLL|-JamBo|-KingBen|-LTRG|-LTT|-Lynks|-Prodji|-STG|-Stuffies|-TD|-TDM|-TFE|-THS|-TLF|-VamPTV|-ViEW|-Vision|-VoX|-vRs|-AJP|-ALLCRiME|-AXIA|-B-G|-BLaZekVCD|-DEViSE|-DiSHON|-DNR|-ELEKTRI4KA|-EMiNENCE|-EOS|-EOSiNT|-ESiR|-Funner|-GHEYLARD|-G0LDz|-HDB|-HDC|-HDmonSK|-HDV|-HDxT|-iAPULA|-iLL|-iRO|-KingBen|-Lynks|-M14CH0|-M794|-McFly|-MMI|-PerfectionHD|-PoTuS|-PrisM|-STG|-Stuffies|-TDM|-THS|-TFE|-THORA|-tK|-TLF|-TRiBE|-TriggeR|-XSHD|-sDx|-HWE|-OOO)"
+P2PEXCEPTS=""
+
+# is the option value different than the category name? 1 = yes, 0 = no
+KEYVAL=1
+
+####################################
+##        FILTERS SETTING         ##
+##                                ##
+## - FILTERS : case insensitive   ##
+## - EXCEPTS : case insensitive   ##
+## - MINS    : min size in MB     ##
+## - MAXS    : max size in MB     ##
+## - CATS    : case sensitive,    ##
+##             look at allcats.   ##
+##             if KEYVAL use NUM  ##
+## - TAGS    : case insensitive	  ##
+##             must be in ""      ##
+##             can be anything    ##
+##             you want           ##
+##                                ##
+##  NOTE: make sure the filter    ##
+##        ends with `let n+=1'    ##
+##                                ##
+####################################
+
+#FILTERS[n]=REGEX
+#EXCEPTS[n]=REGEX
+#MINS[n]=MIN_SIZE
+#MAXS[n]=MAX_SIZE
+#CATS[n]=UPLOAD_CAT
+#TAGS[n]=tags
+n=0;
+
+
+
+####### CONFIDENT FILTERS
+# 5/5   Virtually no torrent should be wrongly identified by these.
+
+##### XXX
+# DVD
+FILTERS[n]=".*XXX.*(NTSC|PAL).*DVDR"
+EXCEPTS[n]=
+MINS[n]=1000
+MAXS[n]=12500
+CATS[n]="5"
+TAGS[n]="DVDR, adult"
+let n+=1
+
+# XviD
+FILTERS[n]=".*XXX.*DVDRip.*XviD"
+EXCEPTS[n]=
+MINS[n]=650
+MAXS[n]=2500
+CATS[n]="5"
+TAGS[n]="DVDRip, adult"
+let n+=1
+
+# XviD
+FILTERS[n]=".*XXX.*BDRip.*XviD"
+EXCEPTS[n]=
+MINS[n]=650
+MAXS[n]=2500
+CATS[n]="5"
+TAGS[n]="BDRip, adult"
+let n+=1
+
+# XviD
+FILTERS[n]=".*XXX.*BRRip.*XviD"
+EXCEPTS[n]=
+MINS[n]=650
+MAXS[n]=2500
+CATS[n]="5"
+TAGS[n]="BRRip, adult"
+let n+=1
+
+# HD
+FILTERS[n]=".*XXX.*720p."
+EXCEPTS[n]=
+MINS[n]=100
+MAXS[n]=25000
+CATS[n]="5"
+TAGS[n]="720p, adult"
+let n+=1
+
+# HD
+FILTERS[n]=".*XXX.*)."
+EXCEPTS[n]=
+MINS[n]=100
+MAXS[n]=25000
+CATS[n]="5"
+TAGS[n]="1080p, adult"
+let n+=1
+
+# HD
+FILTERS[n]=".*XXX.*HD."
+EXCEPTS[n]=
+MINS[n]=100
+MAXS[n]=25000
+CATS[n]="5"
+TAGS[n]="HD, adult"
+let n+=1
+
+# HD
+FILTERS[n]=".*XXX.*BluRay."
+EXCEPTS[n]=
+MINS[n]=100
+MAXS[n]=25000
+CATS[n]="5"
+TAGS[n]="BluRay, adult"
+let n+=1
+
+# HD
+FILTERS[n]=".*XXX.*x264."
+EXCEPTS[n]=
+MINS[n]=100
+MAXS[n]=25000
+CATS[n]="5"
+TAGS[n]="x264, adult"
+let n+=1
+
+# Imagesets
+FILTERS[n]=".*XXX.*IMAGESET"
+EXCEPTS[n]=
+MINS[n]=0
+MAXS[n]=2500
+CATS[n]="5"
+TAGS[n]="adult"
+let n+=1
+
+
+
+####### STRONG FILTERS
+# 4/5   Shouldn't go wrong but can be improved
+
+##### TV
+# XviD
+FILTERS[n]=".*(S[0-9]{2}E[0-9]{2}).*HDTV.*XviD"
+EXCEPTS[n]=
+MINS[n]=70
+MAXS[n]=750
+CATS[n]="2"
+TAGS[n]="SD, XviD, HDTV"
+let n+=1
+
+# XviD
+FILTERS[n]=".*(S[0-9]{2}E[0-9]{2}).*PDTV.*XviD"
+EXCEPTS[n]=
+MINS[n]=70
+MAXS[n]=750
+CATS[n]="2"
+TAGS[n]="SD, XviD, PDTV"
+let n+=1
+
+# XviD
+FILTERS[n]=".*(S[0-9]{2}E[0-9]{2}).*Webrip.*XviD"
+EXCEPTS[n]=
+MINS[n]=70
+MAXS[n]=750
+CATS[n]="2"
+TAGS[n]="SD, XviD, Webrip"
+let n+=1
+
+# XviD
+FILTERS[n]=".*(S[0-9]{2}E[0-9]{2}).*DVDRip.*XviD"
+EXCEPTS[n]=
+MINS[n]=70
+MAXS[n]=750
+CATS[n]="2"
+TAGS[n]="SD, XviD, DVDRip"
+let n+=1
+
+# HD
+FILTERS[n]=".*(S[0-9]{2}E[0-9]{2}).*720p.HDTV.*x264"
+EXCEPTS[n]=
+MINS[n]=400
+MAXS[n]=4000
+CATS[n]="2"
+TAGS[n]="720p, x264, HDTV"
+let n+=1
+
+# HD
+FILTERS[n]=".*(S[0-9]{2}E[0-9]{2}).*720p.WEB-DL.*x264"
+EXCEPTS[n]=
+MINS[n]=400
+MAXS[n]=4000
+CATS[n]="2"
+TAGS[n]="720p, x264, WEB-DL"
+let n+=1
+
+# HD
+FILTERS[n]=".*(S[0-9]{2}E[0-9]{2}).*720p.BluRay.*x264"
+EXCEPTS[n]=
+MINS[n]=400
+MAXS[n]=4000
+CATS[n]="2"
+TAGS[n]="720p, x264, BluRay"
+let n+=1
+
+# HD
+FILTERS[n]=".*(S[0-9]{2}E[0-9]{2}).*1080p.HDTV.*x264"
+EXCEPTS[n]=
+MINS[n]=400
+MAXS[n]=4000
+CATS[n]="2"
+TAGS[n]="1080p, x264, HDTV"
+let n+=1
+
+# HD
+FILTERS[n]=".*(S[0-9]{2}E[0-9]{2}).*1080p.WEB-DL.*x264"
+EXCEPTS[n]=
+MINS[n]=400
+MAXS[n]=4000
+CATS[n]="2"
+TAGS[n]="1080p, x264, WEB-DL"
+let n+=1
+
+# HD
+FILTERS[n]=".*(S[0-9]{2}E[0-9]{2}).*1080p.BluRay.*x264"
+EXCEPTS[n]=
+MINS[n]=400
+MAXS[n]=4000
+CATS[n]="2"
+TAGS[n]="1080p, x264, BluRay"
+let n+=1
+
+# x264-SD
+FILTERS[n]=".*(S[0-9]{2}E[0-9]{2}).*HDTV.*x264"
+EXCEPTS[n]=
+MINS[n]=50
+MAXS[n]=900
+CATS[n]="2"
+TAGS[n]="SD, HDTV, x264"
+let n+=1
+
+# x264-SD
+FILTERS[n]=".*(S[0-9]{2}E[0-9]{2}).*PDTV.*x264"
+EXCEPTS[n]=
+MINS[n]=50
+MAXS[n]=900
+CATS[n]="2"
+TAGS[n]="SD, PDTV, x264"
+let n+=1
+
+# x264-SD
+FILTERS[n]=".*(S[0-9]{2}E[0-9]{2}).*Webrip.*x264"
+EXCEPTS[n]=
+MINS[n]=50
+MAXS[n]=900
+CATS[n]="2"
+TAGS[n]="SD, Webrip, x264"
+let n+=1
+
+
+##################################
+##         SETTINGS END         ##
+##################################
