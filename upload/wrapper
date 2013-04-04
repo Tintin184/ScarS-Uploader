@@ -1,0 +1,27 @@
+#!/bin/bash
+HOME=/home/user
+
+# if invoked by the webui
+if [ $1 = "webui" ]; then
+    if [ $2 = "reset" ]; then
+        if [ -d "$3" ]; then
+            rm -rf "$3/.uploading"
+            rm -rf "$3/.uploaded"
+            rm -rf "$3/.uploaderror"
+        fi
+    elif [ $2 = "hide" ]; then
+        if [ -d "$3" ] && [ ! -d "$3/.hidden" ]; then
+            mkdir "$3/.hidden"
+        fi
+    else
+        if [ -n "$5" ] && [[ $5 =~ ^[0-9]*$ ]] && [ $5 -ge 15 ] && [ $5 -le 28 ]; then
+            upload -y $5 -r "$2" -c "$3" "$4" >/dev/null 2>&1 &
+        else
+            upload -r "$2" -c "$3" "$4" >/dev/null 2>&1 &
+        fi
+    fi
+# if invoked by rtorrent
+elif [ $1 = "rtorrent" ]; then
+    cd "$HOME/upload"
+    upload -z $2 "$3" >/dev/null 2>&1 &
+fi

@@ -1,0 +1,187 @@
+#!/bin/bash
+####################################
+##    example resource file for   ##
+##      torrent upload script     ##
+##                                ##
+##      save in ~/.upload.rc      ##
+##  chmod 700 to restrict access  ##
+####################################
+##         LOGIN SETTINGS         ##
+####################################
+
+# your website username
+USERNAME="user"
+
+# your website password
+PASSWORD="abcdefgijk"
+
+# website login URL
+LOGINURL="http://www.torrentsite.tld/login.php"
+
+# logged in text: something _unique_ to check if you are logged in
+# possibly your username if it's unique and on the page you get directed to after logging in
+LOGINTXT="user"
+
+# login form username: look for input NAME="username"
+LOGINUSR="username"
+
+# login form password: look for input NAME="password"
+LOGINPWD="password"
+
+
+####################################
+##         SEARCH SETTINGS        ##
+####################################
+
+# website search URL
+SEARCHURL="http://www.torrentsite.tld/torrents.php?search="
+
+# search no result text: something _unique_ to check if no results are found
+SEARCHTXT="No results found"
+
+# download dupe: 1 = yes, 0 = no
+# note: only possible if download link is on the torrents page
+DUPEDL=0
+
+# URL that needs to be prepended to the download URL
+DUPEURL="http://www.torrentsite.tld/"
+
+# search download link text:  something _unique_ to find the exact line
+DUPETXT="action=download"
+
+# command to extract the download link from the complete line
+# note: test for the best way to get it outside the script first
+DUPECMD="cut -d \" -f 2"
+
+####################################
+##         UPLOAD SETTINGS        ##
+####################################
+
+# website upload URL
+UPLOADURL="http://www.torrent-site.tld/upload.php"
+
+# your personal announce URL
+ANNOUNCEURL="http://tracker.torrent-site.tld/s0m3p4ssk4yf0rth3s1t3/announce"
+
+# upload form torrent: look for input NAME="torrent"
+UPLOADTOR="torrent"
+
+# upload form category: look for select NAME="category"
+UPLOADCAT="cat"
+
+# upload form extras: look for other inputs with NAME and VALUE
+# and add to the list with: -F 'name=value'
+UPLOADXTRA="-F 'submit=true' -F 'anonymous=on' -F 'auth=s0m34uthk3yf0rth3s1t3t00' -F 'nfo=@\$NFO'"
+
+
+####################################
+##          PATH SETTINGS         ##
+####################################
+
+# path to your downloads directory
+DOWNLOADS="/home/user/downloads/"
+
+# path to your torrent client watch directory
+TORRENTS="/home/user/torrents/"
+
+# path to your log file: set to /dev/null to disable logging
+LOGFILE="/home/user/upload/upload.log"
+
+# path to curl: if in $PATH just enter curl
+CURL="curl"
+
+# path to mktorrent: if in $PATH just enter mktorrent
+MKT="mktorrent"
+
+# path to rtorrent_fast_resume.pl: leave empty if you dont want to use this
+RFR="/home/user/rtorrent_fast_resume.pl"
+
+
+####################################
+##       ADVANCED SETTINGS        ##
+####################################
+
+# string used to identify as a specific user-agent
+USERAGENT="Mozilla/4.0"
+
+# text to prepend on the torrent file before moving it to your torrents dir
+PREPEND="au."
+
+# check for already uploading: use with UPCHECK - 1 = yes, 0 = no
+# you only need to disable this if you expect to upload the same torrent multiple times at the same time
+UPCHECK=1
+
+# list of categories able to be uploaded into: look for options after select NAME=category
+# if the option value is a number add it _after_ the category name
+ALLCATS=(
+	"TV/XviD" "TV/HD" "TV/Pack"
+	"Movies/XviD" "Movies/DVDR" "Movies/BluRay" "Movie/Pack" "XXX/XviD"
+	"Games/PC" "Games/Xbox" "Games/PSX" "Games/Wii" "Games/Misc" "Games/Pack"
+	"Music/MP3" "Music/FLAC" "Music/Video" "Music/Misc" "Music/Pack"
+	"0day" "Ebook" "Misc"
+)
+
+# is the option value different than the category name? 1 = yes, 0 = no
+KEYVAL=0
+
+
+####################################
+##        FILTERS SETTING         ##
+##                                ##
+## - FILTERS : case insensitive   ##
+## - EXCEPTS : case insensitive   ##
+## - MINS    : min size in MB     ##
+## - MAXS    : max size in MB     ##
+## - CATS    : case sensitive,    ##
+##             look at allcats.   ##
+##             if KEYVAL use NUM  ##
+##                                ##
+##  NOTE: make sure the filter    ##
+##        ends with `let n+=1'    ##
+##                                ##
+####################################
+
+#FILTERS[n]=REGEX
+#EXCEPTS[n]=REGEX
+#MINS[n]=NUMBER
+#MAXS[n]=NUMBER
+#CATS[n]=NUMBER|STRING
+n=0
+
+# match starts with House or Simpsons or South Park S00E00 in format XviD which are not DSR or REPACK and are between 70 and 400 MB
+FILTERS[n]="^(house|simpsons|south.park).*S[0-9]{2}E[0-9]{2}.*XviD"
+EXCEPTS[n]="DSR|REPACK"
+MINS[n]=70
+MAXS[n]=400
+CATS[n]="TV/XviD"
+let n+=1
+
+# match starts with House or CSI or NCIS S00E00 in format 720p which are between 800 and 1500 MB (1.5 GB)
+FILTERS[n]="^(house|CSI|NCIS).*S[0-9]{2}E[0-9]{2}.*720p"
+EXCEPTS[n]=
+MINS[n]=800
+MAXS[n]=1500
+CATS[n]="TV/HD"
+let n+=1
+
+# match XXX.DVDRip.XviD which are not REPACK or PROPER and are between 650 and 750 MB
+FILTERS[n]="XXX.DVDRip.XviD"
+EXCEPTS[n]="REPACK|PROPER"
+MINS[n]=650
+MAXS[n]=750
+CATS[n]="XXX/XviD"
+let n+=1
+
+# match DVDRip.XviD which are between 650 and 1500 MB (1.5 GB)
+# NOTE: this is placed after series and XXX filters so it doesn't match most DVDRip series or XXX
+# NOTE: if a DVDRip series or documentary which is not S00E00 format it will be matched as well so this filter might not be trusted
+FILTERS[n]="DVDRip.XviD"
+EXCEPTS[n]=
+MINS[n]=650
+MAXS[n]=1500
+CATS[n]="Movies/XviD"
+let n+=1
+
+##################################
+##         SETTINGS END         ##
+##################################

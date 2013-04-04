@@ -1,0 +1,29 @@
+# password to access the webui: required
+pass = abcdefg
+
+# path to downloads dir: required
+data = /home/user/downloads/
+
+# default directory sorting type: latest / alphabetically
+datasort = latest
+
+# default directory sorting order: asc[ending] / desc[ending]
+dataorder = desc
+
+# theme to use: light, dark, custom
+theme = dark
+
+# show directory size on hover over release: 1 = yes, 0 = no
+sizes = 1
+
+# print the upload command rather than executing it: 1 = yes, 0 = no
+debug = 0
+
+# show only these sites in the dropdown: case-insensitive comma seperated list
+sites = AO, TV
+
+# sort sites alphabetically: 1 = yes, 0 = no
+sitesort = 1
+
+# sort categories alphabetically: 1 = yes, 0 = no
+catsort = 1
