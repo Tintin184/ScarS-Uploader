@@ -1,0 +1,93 @@
+* {
+    font-family: "Calibri";
+    margin: 0;
+    padding: 0;
+    color: #888;
+}
+body {
+    background-color: #101010;
+    margin: 10px 0 50px 0;
+}
+h1 {
+    font-size: 19px;
+    width: 1000px;
+    margin: 0 auto;
+    padding: 5px;
+}
+ul {
+    font-size: 12px;
+    width: 1000px;
+    margin: 0 auto 10px;
+    padding-left: 40px;
+}
+ul li {
+    color: #F00;
+}
+div#main {
+    border: 1px solid #444;
+    width: 1000px;
+    margin: 0 auto;
+    padding: 5px;
+}
+div#top {
+    height: 20px;
+    border-bottom: 1px solid #444;
+    margin-bottom: 10px;
+}
+div#top div#sorting {
+    float: right;
+}
+div#top span {
+    font-size: 11px;
+    float: left;
+    margin: 0 2px;
+}
+a {
+    color: #555;
+}
+div.torrent {
+    margin: 1px;
+}
+div.clear {
+    clear: both;
+}
+div.name {
+    width: 620px;
+    float: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+div.uploading {
+    color: #00F;
+}
+div.uploaded {
+    color: #0A0;
+}
+div.error {
+    color: #F00;
+}
+div.hidden {
+    color: #333;
+}
+form {
+    float: right;
+}
+select {
+    width: 85px;
+    color: #000;
+}
+select.wide {
+    width: 130px;
+}
+input[type=submit] {
+    background: #FFF;
+    border: 1px solid #444;
+    width: 60px;
+    padding: 0 3px;
+    cursor: pointer;
+    color: #000;
+}
+option {
+    color: #000;
+}

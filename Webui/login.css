@@ -1,0 +1,56 @@
+* {
+    font-family: "Calibri";
+    margin: 0;
+    padding: 0;
+    color: #444;
+}
+body {
+    background-color: #FAFAFA;
+    margin-top: 10px 0 50px 0;
+}
+div#main {
+    border: solid black 1px;
+    width: 600px;
+    margin: 0 auto;
+    padding: 5px;
+}
+h1 {
+    font-size: 19px;
+    width: 600px;
+    margin: 0 auto;
+    padding: 5px;
+}
+ul {
+    font-size: 12px;
+    width: 600px;
+    margin: 0 auto 10px;
+    padding-left: 40px;
+}
+li {
+    color: #F00;
+}
+div.input {
+    float: left;
+    margin: 0 10px;
+}
+div.clear {
+    clear: both;
+}
+label {
+    display: block;
+}
+input[type=text],
+input[type=password] {
+    width: 200px;
+}
+input[type=checkbox] {
+    margin: 5px 0 10px 5px;
+}
+input[type=submit] {
+    background: #FFF;
+    border: solid 1px #000;
+    width: 70px;
+    margin: 5px 20px;
+    padding: 2px 10px;
+    cursor: pointer;
+}
