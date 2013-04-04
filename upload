@@ -623,41 +623,54 @@ if [[ ! $TEST =~ mkt ]] && [[ ! $TEST =~ rfr ]]; then
     echo -e "\bno dupe found\n"
 fi
 
-# calculate piece size depending on dir size
+if ( which bc &>/dev/null ); then
+  PIECES=$(printf '%.0f' $(echo "l($MBs)/l(2)+10" | bc -l))
+  echo "Piece size calculated: 2^$PIECES"
+  if [ $PIECES -gt 28 ]; then
+    	PIECES=28
+  fi
+  if [ $PIECES -lt 15 ]; then
+	PIECES=15
+  fi
+fi
+if [ $PIECES -lt 15 ] || [ $PIECES -gt 28 ] || [ "$PIECES" = "" ]; then
+	# calculate piece size depending on dir size
 
-# > 473 GB -> 32 MB piece size (15.136+ pieces)
-if [ $MBs -gt 484352 ]; then
-    PIECES=24
-# 190 - 473 GB -> 16 MB piece size (12160 - 30272 pieces)
-elif [ $MBs -gt 194560 ]; then
-    PIECES=24
-# 72 - 190 GB -> 8 MB piece size (9216 - 24320 pieces)
-elif [ $MBs -gt 73728 ]; then
-    PIECES=23
-# 16 - 72 GB -> 4 MB piece size (4096 - 18432 pieces)
-elif [ $MBs -gt 16384 ]; then
-    PIECES=22
-# 8 - 16 GB -> 2 MB piece size (4096 - 8192 pieces)
-elif [ $MBs -gt 8192 ]; then
-    PIECES=21
-# 4 - 8 GB -> 1 MB piece size (4096 - 8192 pieces)
-elif [ $MBs -gt 4096 ]; then
-    PIECES=20
-# 2 - 4 GB -> 512 KB piece size (4096 - 8192 pieces)
-elif [ $MBs -gt 2048 ]; then
-    PIECES=19
-# 1 - 2 GB -> 256 KB piece size (4096 - 8192 pieces)
-elif [ $MBs -gt 1024 ]; then
-    PIECES=18
-# 512 MB - 1 GB -> 128 KB piece size (4096 - 8192 pieces)
-elif [ $MBs -gt 512 ]; then
-    PIECES=17
-# 256 MB - 512 MB -> 64 KB piece size (4096 - 8192 pieces)
-elif [ $MBs -gt 256 ]; then
-    PIECES=16
-# < 256 MB -> 32 KB piece size (1 - 8192 pieces)
-else
-    PIECES=15
+	# > 473 GB -> 32 MB piece size (15.136+ pieces)
+	if [ $MBs -gt 484352 ]; then
+    		PIECES=28	#was 24
+	# 190 - 473 GB -> 16 MB piece size (12160 - 30272 pieces)
+	elif [ $MBs -gt 194560 ]; then
+    		PIECES=27	#was 24
+	# 72 - 190 GB -> 8 MB piece size (9216 - 24320 pieces)
+	elif [ $MBs -gt 73728 ]; then
+    		PIECES=26	#was 23
+	# 16 - 72 GB -> 4 MB piece size (4096 - 18432 pieces)
+	elif [ $MBs -gt 16384 ]; then
+    		PIECES=25	#was 22
+	# 8 - 16 GB -> 2 MB piece size (4096 - 8192 pieces)
+	elif [ $MBs -gt 8192 ]; then
+    		PIECES=23	#was 21
+	# 4 - 8 GB -> 1 MB piece size (4096 - 8192 pieces)
+	elif [ $MBs -gt 4096 ]; then
+    		PIECES=22	#was 20
+	# 2 - 4 GB -> 512 KB piece size (4096 - 8192 pieces)
+	elif [ $MBs -gt 2048 ]; then
+    		PIECES=21	#was 19
+	# 1 - 2 GB -> 256 KB piece size (4096 - 8192 pieces)
+	elif [ $MBs -gt 1024 ]; then
+    		PIECES=20	#was 18
+	# 512 MB - 1 GB -> 128 KB piece size (4096 - 8192 pieces)
+	elif [ $MBs -gt 512 ]; then
+    		PIECES=19	#was 17
+	# 256 MB - 512 MB -> 64 KB piece size (4096 - 8192 pieces)
+	elif [ $MBs -gt 256 ]; then
+    			PIECES=18	#was 16
+	# < 256 MB -> 32 KB piece size (1 - 8192 pieces)
+	else
+    		PIECES=16	#was  15
+	fi
+	echo "Piece picked from table: 2^$PIECES"
 fi
 
 # set specified piece size
@@ -666,7 +679,7 @@ if [ -n "$PIECE_SIZE" ]; then
 fi
 
 # if piece size matched entered piece size not to chose size and is highest possible piece size decrement by 1
-if [[ $NOTPIECES -eq $PIECES ]] && [ $PIECES -eq 23 ]; then
+if [[ $NOTPIECES -eq $PIECES ]] && [ $PIECES -eq 28 ]; then
     let PIECES-=1
     echo "### original piece size: $NOTPIECES ("$((2**NOTPIECES))" bytes)" >> "$LOGFILE"
     echo "### piece size: $PIECES ("$((2**PIECES))" bytes)" >> "$LOGFILE"
