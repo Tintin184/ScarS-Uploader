@@ -27,8 +27,8 @@
 ##  -o <file>      : log output to file                     ##
 ##  -p <password>  : password                               ##
 ##  -r <file>      : load resource file                     ##
-##  -s <site>      : load .site.rc 							##
-##	-t <tags>      : tags to add must be in quotes          ##
+##  -s <site>      : load .site.rc 			    ##
+##  -t <tags>      : tags to add must be in quotes          ##
 ##  -u <username>  : username                               ##
 ##  -w <path>      : path to torrentclient watch directory  ##
 ##  -x <test>      : execute test [ cat, mkt, rfr ]         ##
