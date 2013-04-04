@@ -2,7 +2,7 @@
 
 ##############################################################
 ##                                                          ##
-##  ScarS' torrent upload script v0.9.7                     ##
+##  ScarS' torrent upload script v0.9.8                     ##
 ##                                                          ##
 ##  created by: ScarS                                       ##
 ##  edited by: BladE, TinTin                                ##
@@ -27,7 +27,7 @@
 ##  -o <file>      : log output to file                     ##
 ##  -p <password>  : password                               ##
 ##  -r <file>      : load resource file                     ##
-##  -s <site>      : load .site.rc 			    ##
+##  -s <site>      : load .site.rc                          ##
 ##  -t <tags>      : tags to add must be in quotes          ##
 ##  -u <username>  : username                               ##
 ##  -w <path>      : path to torrentclient watch directory  ##
@@ -48,7 +48,7 @@
 ##############################################################
 
 # version number
-VERSION=0.9.7
+VERSION=0.9.8
 
 ###############################
 ##        SCRIPT START       ##
