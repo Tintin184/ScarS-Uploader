@@ -14,9 +14,18 @@ if [ $1 = "webui" ]; then
             mkdir "$3/.hidden"
         fi
     else
+        
         if [ -n "$5" ] && [[ $5 =~ ^[0-9]*$ ]] && [ $5 -ge 15 ] && [ $5 -le 28 ]; then
-            upload -y $5 -r "$2" -c "$3" "$4" >/dev/null 2>&1 &
+            TAGS="";
+            if [ -n "$6" ]; then
+                TAGS="-t '$6'"
+            fi
+            upload -y $5 -r "$2" -c "$3" "$4" $TAGS >/dev/null 2>&1 &
         else
+            TAGS="";
+            if [ -n "$5" ]; then
+                TAGS="-t '$5'"
+            fi
             upload -r "$2" -c "$3" "$4" >/dev/null 2>&1 &
         fi
     fi
