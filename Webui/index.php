@@ -266,7 +266,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $errors[] = "you entered an invalid piece size";
 
             if (empty($errors)) {
-                $cmd .= " " . escapeshellarg("." . strtolower($_POST["site"]) . ".rc") . " " . escapeshellarg($_POST["category"]) . " " . escapeshellarg($_POST["release"]) . (empty($_POST["pieces"]) ? "" : " " . $_POST["pieces"]);
+                $cmd .= " " . escapeshellarg("." . strtolower($_POST["site"]) . ".rc") . " " . escapeshellarg($_POST["category"]) . " " . escapeshellarg($_POST["release"]) . (empty($_POST["pieces"]) ? "" : " " . $_POST["pieces"]) . " " . escapeshellarg($_POST["tags"]);
 
                 // check if the user wants to debug or execute
                 if ($user["debug"])
@@ -507,6 +507,7 @@ if ($user === null) {
                         <select class="wide" name="category" title="<?php echo $esc; ?>">
                             <?php echo $catsdd; ?>
                         </select>
+                        <input type="text" name="tags" title="tags (optional): <?php echo $esc; ?>" value="" />
                         <input type="submit" value="Upload" title="<?php echo $esc; ?>" />
                     </div>
                 </form>
