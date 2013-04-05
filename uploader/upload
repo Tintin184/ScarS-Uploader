@@ -454,12 +454,12 @@ if [ "$NAME" = "$FPATH" ]; then
 fi
 
 # check filters
-if [ ! -n "$CAT" ]; then
+if [ ! -n "$CAT" ] && [ ! -n "$TAG" ]; then
     FMATCH=0
     # walk array of filters and search for a match
     for (( i = 0; i < ${#FILTERS[@]}; i++ )); do
         # if a match was found set the min, max and category and stop looping
-        if [[ "$RLSPATH" =~ ${FILTERS[$i]} ]] && [[ ! -n ${EXCEPTS[i]} || ! "$RLSPATH" =~ ${EXCEPTS[i]} ]]; then
+        if [[ "$RLSPATH" =~ ${FILTERS[$i]} ]] && [[ ! -n ${EXCEPTS[i]} || ! "$RLSPATH" =~ ${EXCEPTS[i]} ]] && [[ ! -n "$CAT" || "$CAT" = "${CATS[i]}" ]]; then
             MINSIZE=${MINS[i]}
             MAXSIZE=${MAXS[i]}
             CAT=${CATS[i]}
