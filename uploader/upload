@@ -502,6 +502,9 @@ SIZE=$(du -s "$FPATH" | cut -f 1)
 
 # get the dir size in MB
 MBs=$((SIZE/1024))
+if [[ $MBs -eq "0" ]] && [[ $SIZE -gt "0" ]]; then
+    MBs=1
+fi
 
 # look for match with size filter and if found return an error
 if [ -n "$FMATCH" ] && [[ $MBs -lt $MINSIZE || $MBs -gt $MAXSIZE ]]; then
