@@ -31,7 +31,7 @@
 ##  -t <tags>      : tags to add must be in quotes          ##
 ##  -u <username>  : username                               ##
 ##  -w <path>      : path to torrentclient watch directory  ##
-##  -x <test>      : execute test [ cat, mkt, rfr ]         ##
+##  -x <test>      : execute test [cat, p2p, dupe, mkt, rfr]##
 ##  -y <number>    : piece size to use [ in 2^n bytes ]     ##
 ##  -z <number>    : piece size NOT to use [ in kB ]        ##
 ##                                                          ##
@@ -224,7 +224,7 @@ options:
 -t <tags>      : tags to add must be in quotes
 -u <username>  : username
 -w <path>      : path to torrentclient watch directory
--x <test>      : execute test [ cat, mkt, rfr ]
+-x <test>      : execute test [ cat, p2p, dupe, mkt, rfr ]
 -y <number>    : piece size to use [ in 2^n bytes ]
 -z <number>    : piece size NOT to use [ in kB ]
 EOF
@@ -594,6 +594,15 @@ if [[ ! $TEST =~ mkt ]] && [[ ! $TEST =~ rfr ]]; then
 
     # check if a result was found
     DUPECHECK=$(grep "$SEARCHTXT" dupecheck.tmp)
+
+    # If we are dupe checking, dump out debugging and exit
+    if [[ $TEST =~ dupe ]]; then
+       echo -e "\ndupe was checked with: $SEARCHURL$SEARCHNAME"
+       echo "dupe filtered with: $SEARCHTXT"
+       echo "dupe result: $DUPECHECK"
+       cleanup_process "dupecheck"
+       exit 1
+    fi
 
     # if a result was found stop the auto upload
     if [ ! -n "$DUPECHECK" ]; then
