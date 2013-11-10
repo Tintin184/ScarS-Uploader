@@ -709,7 +709,7 @@ fi
 echo "### mktorrent started: $(date)" >> "$LOGFILE"
 
 # create the torrent
-"$MKT" -l $PIECES -c "TD Home away from home" -o "$NAME.torrent" -pa "$ANNOUNCEURL" "$FPATH"
+"$MKT" -l $PIECES -c "RM" -o "$NAME.torrent" -pa "$ANNOUNCEURL" "$FPATH"
 
 # log complete mktorrent
 echo "### mktorrent completed: $(date)" >> "$LOGFILE"
